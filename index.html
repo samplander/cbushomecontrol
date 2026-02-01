@@ -284,6 +284,54 @@
             font-size: 1rem;
         }
         
+        .input-label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+            margin-top: 5px;
+        }
+        
+        .input-label:first-child {
+            margin-top: 0;
+        }
+        
+        .btn-test {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        
+        .btn-test:active {
+            background: var(--border);
+        }
+        
+        .connection-test {
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .connection-test.success {
+            display: block;
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--on);
+        }
+        
+        .connection-test.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
         .modal-buttons {
             display: flex;
             gap: 10px;
@@ -499,9 +547,16 @@
             
             <!-- Connection Tab -->
             <div class="tab-content active" id="tab-connection">
-                <input type="text" id="settingsHost" placeholder="Host (e.g. 192.168.2.110:8008)">
+                <label class="input-label">C-Bus Controller LAN IP</label>
+                <input type="text" id="settingsIP" placeholder="e.g. 192.168.2.110" inputmode="decimal">
+                <label class="input-label">Port</label>
+                <input type="text" id="settingsPort" placeholder="e.g. 8008" inputmode="numeric">
+                <label class="input-label">Username</label>
                 <input type="text" id="settingsUser" placeholder="Username">
+                <label class="input-label">Password</label>
                 <input type="password" id="settingsPass" placeholder="Password">
+                <div class="connection-test" id="connectionTest"></div>
+                <button class="btn-test" onclick="testConnection()">🔌 Test Connection</button>
             </div>
             
             <!-- Manage Lights Tab -->
@@ -523,10 +578,16 @@
     <script>
         // Configuration - Edit these or use settings
         let CONFIG = {
-            host: localStorage.getItem('cbus_host') || '192.168.2.110:8008',
+            ip: localStorage.getItem('cbus_ip') || '192.168.2.110',
+            port: localStorage.getItem('cbus_port') || '8008',
             username: localStorage.getItem('cbus_user') || '',
             password: localStorage.getItem('cbus_pass') || ''
         };
+        
+        // Get full host URL
+        function getBaseUrl() {
+            return `http://${CONFIG.ip}:${CONFIG.port}/scada-remote`;
+        }
         
         // Light visibility settings (persisted to localStorage)
         let lightVisibility = JSON.parse(localStorage.getItem('cbus_light_visibility') || '{}');
@@ -632,8 +693,7 @@
         
         // API call helper
         async function cbusCall(action, group, value = null) {
-            const baseUrl = `http://${CONFIG.host}/scada-remote`;
-            let url = `${baseUrl}?m=json&r=cbus1&c=${action}&matchnet=0&matchapp=56&matchgrp=${group}`;
+            let url = `${getBaseUrl()}?m=json&r=cbus1&c=${action}&matchnet=0&matchapp=56&matchgrp=${group}`;
             
             if (value !== null) {
                 url += `&value=${value}`;
@@ -787,9 +847,15 @@
         
         // Settings
         function openSettings() {
-            document.getElementById('settingsHost').value = CONFIG.host;
+            document.getElementById('settingsIP').value = CONFIG.ip;
+            document.getElementById('settingsPort').value = CONFIG.port;
             document.getElementById('settingsUser').value = CONFIG.username;
             document.getElementById('settingsPass').value = CONFIG.password;
+            
+            // Reset connection test display
+            const testEl = document.getElementById('connectionTest');
+            testEl.className = 'connection-test';
+            testEl.textContent = '';
             
             // Build the manage lights list
             buildManageLightsList();
@@ -802,6 +868,44 @@
         
         function closeSettings() {
             document.getElementById('settingsModal').classList.remove('open');
+        }
+        
+        async function testConnection() {
+            const testEl = document.getElementById('connectionTest');
+            testEl.className = 'connection-test';
+            testEl.textContent = 'Testing...';
+            testEl.style.display = 'block';
+            
+            // Temporarily use form values for test
+            const testConfig = {
+                ip: document.getElementById('settingsIP').value,
+                port: document.getElementById('settingsPort').value,
+                username: document.getElementById('settingsUser').value,
+                password: document.getElementById('settingsPass').value
+            };
+            
+            const url = `http://${testConfig.ip}:${testConfig.port}/scada-remote?m=json&r=cbus1&c=get&matchnet=0&matchapp=56&matchgrp=1`;
+            
+            const headers = {};
+            if (testConfig.username && testConfig.password) {
+                headers['Authorization'] = 'Basic ' + btoa(testConfig.username + ':' + testConfig.password);
+            }
+            
+            try {
+                const response = await fetch(url, { headers });
+                const text = await response.text();
+                
+                if (response.ok && !text.includes('Invalid') && !text.includes('denied')) {
+                    testEl.className = 'connection-test success';
+                    testEl.textContent = '✓ Connected successfully!';
+                } else {
+                    testEl.className = 'connection-test error';
+                    testEl.textContent = '✗ Connection failed: ' + text.substring(0, 50);
+                }
+            } catch (e) {
+                testEl.className = 'connection-test error';
+                testEl.textContent = '✗ Cannot reach device: ' + e.message;
+            }
         }
         
         function switchTab(tabName) {
@@ -880,11 +984,13 @@
         }
         
         function saveSettings() {
-            CONFIG.host = document.getElementById('settingsHost').value;
+            CONFIG.ip = document.getElementById('settingsIP').value;
+            CONFIG.port = document.getElementById('settingsPort').value;
             CONFIG.username = document.getElementById('settingsUser').value;
             CONFIG.password = document.getElementById('settingsPass').value;
             
-            localStorage.setItem('cbus_host', CONFIG.host);
+            localStorage.setItem('cbus_ip', CONFIG.ip);
+            localStorage.setItem('cbus_port', CONFIG.port);
             localStorage.setItem('cbus_user', CONFIG.username);
             localStorage.setItem('cbus_pass', CONFIG.password);
             
