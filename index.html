@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Home Lights</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="application-name" content="Home Lights">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Lights">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f0f1a">
+    <meta name="msapplication-TileColor" content="#0f0f1a">
+    
+    <!-- Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        :root {
+            --bg: #0f0f1a;
+            --card: #1a1a2e;
+            --card-on: #1e2a1e;
+            --border: #333;
+            --text: #eee;
+            --text-dim: #888;
+            --accent: #ffd700;
+            --on: #4ade80;
+            --off: #666;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 10px;
+            padding-bottom: 80px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 5px 15px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 15px;
+        }
+        
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--off);
+        }
+        .status-dot.connected { background: var(--on); }
+        
+        /* Room sections */
+        .room {
+            margin-bottom: 20px;
+        }
+        
+        .room-header {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 5px 10px;
+            margin-bottom: 8px;
+        }
+        
+        .room-lights {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 10px;
+        }
+        
+        /* Light card */
+        .light {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .light.on {
+            background: var(--card-on);
+            border-color: var(--on);
+        }
+        
+        .light-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        
+        .light-icon {
+            font-size: 1.5rem;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+        }
+        
+        .light.on .light-icon {
+            opacity: 1;
+        }
+        
+        .light-toggle {
+            width: 44px;
+            height: 26px;
+            border-radius: 13px;
+            background: var(--off);
+            position: relative;
+            transition: background 0.2s;
+        }
+        
+        .light.on .light-toggle {
+            background: var(--on);
+        }
+        
+        .light-toggle::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s;
+        }
+        
+        .light.on .light-toggle::after {
+            transform: translateX(18px);
+        }
+        
+        .light-name {
+            font-weight: 500;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+        
+        .light-level {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+        
+        /* Dimmer slider (shown on long press or tap when on) */
+        .light-slider {
+            margin-top: 12px;
+            display: none;
+        }
+        
+        .light.expanded .light-slider {
+            display: block;
+        }
+        
+        .light-slider input {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: var(--border);
+            border-radius: 3px;
+            outline: none;
+        }
+        
+        .light-slider input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+        
+        /* Quick actions bar */
+        .quick-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            padding: 12px;
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+        }
+        
+        .quick-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: var(--border);
+            color: var(--text);
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .quick-btn:active {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        /* Scenes section */
+        .scenes {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 5px 0 15px;
+            margin-bottom: 10px;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .scene-btn {
+            flex-shrink: 0;
+            padding: 10px 20px;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: var(--card);
+            color: var(--text);
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        
+        .scene-btn:active {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        /* Settings modal */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .modal.open { display: flex; }
+        
+        .modal-content {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 20px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .modal h2 {
+            margin-bottom: 15px;
+        }
+        
+        .modal input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .modal-buttons button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        
+        .btn-save {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        .btn-cancel {
+            background: var(--border);
+            color: var(--text);
+        }
+        
+        /* Settings gear */
+        .settings-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.2rem;
+            cursor: pointer;
+            padding: 5px;
+        }
+        
+        /* Manage lights modal */
+        .manage-lights {
+            max-height: 60vh;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        
+        .manage-room {
+            margin-bottom: 15px;
+        }
+        
+        .manage-room-header {
+            font-size: 0.8rem;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .manage-light-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background: var(--bg);
+            border-radius: 8px;
+            margin-bottom: 6px;
+        }
+        
+        .manage-light-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .manage-light-icon {
+            font-size: 1.2rem;
+        }
+        
+        .manage-light-name {
+            font-size: 0.95rem;
+        }
+        
+        .manage-light-group {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+        
+        /* Toggle switch for visibility */
+        .visibility-toggle {
+            position: relative;
+            width: 50px;
+            height: 28px;
+            cursor: pointer;
+        }
+        
+        .visibility-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .visibility-slider {
+            position: absolute;
+            inset: 0;
+            background: var(--off);
+            border-radius: 14px;
+            transition: 0.3s;
+        }
+        
+        .visibility-slider::before {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: white;
+            top: 3px;
+            left: 3px;
+            transition: 0.3s;
+        }
+        
+        .visibility-toggle input:checked + .visibility-slider {
+            background: var(--on);
+        }
+        
+        .visibility-toggle input:checked + .visibility-slider::before {
+            transform: translateX(22px);
+        }
+        
+        .modal-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .modal-tab {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        
+        .modal-tab.active {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .quick-actions-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .quick-actions-row button {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+        
+        .quick-actions-row button:active {
+            background: var(--border);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>💡 Home Lights</h1>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="status-dot" id="statusDot"></div>
+            <button class="settings-btn" onclick="openSettings()">⚙️</button>
+        </div>
+    </header>
+    
+    <div class="scenes">
+        <button class="scene-btn" onclick="setScene('allOff')">🌙 All Off</button>
+        <button class="scene-btn" onclick="setScene('allOn')">☀️ All On</button>
+        <button class="scene-btn" onclick="setScene('evening')">🌅 Evening</button>
+        <button class="scene-btn" onclick="setScene('night')">🌃 Night</button>
+    </div>
+    
+    <div id="rooms"></div>
+    
+    <div class="quick-bar">
+        <button class="quick-btn" onclick="setScene('allOff')">All Off</button>
+        <button class="quick-btn" onclick="refreshAll()">Refresh</button>
+        <button class="quick-btn" onclick="setScene('allOn')">All On</button>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h2>⚙️ Settings</h2>
+            
+            <div class="modal-tabs">
+                <button class="modal-tab active" onclick="switchTab('connection')">Connection</button>
+                <button class="modal-tab" onclick="switchTab('lights')">Manage Lights</button>
+            </div>
+            
+            <!-- Connection Tab -->
+            <div class="tab-content active" id="tab-connection">
+                <input type="text" id="settingsHost" placeholder="Host (e.g. 192.168.2.110:8008)">
+                <input type="text" id="settingsUser" placeholder="Username">
+                <input type="password" id="settingsPass" placeholder="Password">
+            </div>
+            
+            <!-- Manage Lights Tab -->
+            <div class="tab-content" id="tab-lights">
+                <div class="quick-actions-row">
+                    <button onclick="setAllLightsVisibility(true)">Show All</button>
+                    <button onclick="setAllLightsVisibility(false)">Hide All</button>
+                </div>
+                <div class="manage-lights" id="manageLightsList"></div>
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+                <button class="btn-save" onclick="saveSettings()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Edit these or use settings
+        let CONFIG = {
+            host: localStorage.getItem('cbus_host') || '192.168.2.110:8008',
+            username: localStorage.getItem('cbus_user') || '',
+            password: localStorage.getItem('cbus_pass') || ''
+        };
+        
+        // Light visibility settings (persisted to localStorage)
+        let lightVisibility = JSON.parse(localStorage.getItem('cbus_light_visibility') || '{}');
+        
+        // Check if a light is visible (default to true if not set)
+        function isLightVisible(group) {
+            return lightVisibility[group] !== false;
+        }
+        
+        // Set light visibility
+        function setLightVisibility(group, visible) {
+            lightVisibility[group] = visible;
+        }
+        
+        // Save visibility to localStorage
+        function saveVisibility() {
+            localStorage.setItem('cbus_light_visibility', JSON.stringify(lightVisibility));
+        }
+        
+        // Your C-Bus lights configuration from the screenshot
+        const LIGHTS = [
+            // D1 - Indoor Lights
+            { group: 1, name: 'Main Bed', room: 'Bedrooms', icon: '🛏️' },
+            { group: 2, name: 'Dresser', room: 'Bedrooms', icon: '🪞' },
+            { group: 3, name: 'Bedroom 1', room: 'Bedrooms', icon: '🛏️' },
+            { group: 4, name: 'Bedroom 2', room: 'Bedrooms', icon: '🛏️' },
+            { group: 5, name: 'Passage', room: 'Living Areas', icon: '🚶' },
+            { group: 6, name: 'Main Bath', room: 'Bathrooms', icon: '🛁' },
+            { group: 7, name: 'Bath 2', room: 'Bathrooms', icon: '🛁' },
+            { group: 8, name: 'Study', room: 'Living Areas', icon: '📚' },
+            { group: 9, name: 'Guest WC', room: 'Bathrooms', icon: '🚽' },
+            { group: 10, name: 'Foyer', room: 'Living Areas', icon: '🚪' },
+            { group: 11, name: 'Lounge', room: 'Living Areas', icon: '🛋️' },
+            { group: 12, name: 'Dining Area', room: 'Living Areas', icon: '🍽️' },
+            { group: 13, name: 'Kitchen Counter', room: 'Kitchen', icon: '🔪' },
+            { group: 14, name: 'Patio', room: 'Outdoor', icon: '🌿' },
+            
+            // R1 - Outdoor/Utility
+            { group: 15, name: 'Back Yard', room: 'Outdoor', icon: '🌳' },
+            { group: 16, name: 'Staff Yard', room: 'Outdoor', icon: '🏠' },
+            { group: 17, name: 'Kitchen Main', room: 'Kitchen', icon: '🍳' },
+            { group: 18, name: 'Laundry', room: 'Utility', icon: '🧺' },
+            { group: 19, name: 'Staff WC', room: 'Utility', icon: '🚽' },
+            { group: 20, name: 'Garage', room: 'Outdoor', icon: '🚗' },
+            { group: 21, name: 'Garage O/S Wall', room: 'Outdoor', icon: '💡' },
+            { group: 22, name: 'Foyer Entrance', room: 'Outdoor', icon: '🚪' },
+            { group: 23, name: 'Water Feature', room: 'Outdoor', icon: '⛲' },
+            { group: 24, name: 'Pump', room: 'Utility', icon: '💧' },
+        ];
+        
+        // Track light states
+        const lightStates = {};
+        
+        // Build the UI
+        function buildUI() {
+            const roomsContainer = document.getElementById('rooms');
+            const roomGroups = {};
+            
+            // Group lights by room (only visible ones)
+            LIGHTS.forEach(light => {
+                if (!isLightVisible(light.group)) return; // Skip hidden lights
+                
+                if (!roomGroups[light.room]) {
+                    roomGroups[light.room] = [];
+                }
+                roomGroups[light.room].push(light);
+            });
+            
+            // Room order
+            const roomOrder = ['Living Areas', 'Kitchen', 'Bedrooms', 'Bathrooms', 'Outdoor', 'Utility'];
+            
+            roomsContainer.innerHTML = roomOrder.map(roomName => {
+                const lights = roomGroups[roomName];
+                if (!lights || lights.length === 0) return ''; // Skip empty rooms
+                
+                return `
+                    <div class="room">
+                        <div class="room-header">${roomName}</div>
+                        <div class="room-lights">
+                            ${lights.map(light => `
+                                <div class="light" id="light-${light.group}" 
+                                     onclick="toggleLight(${light.group})"
+                                     oncontextmenu="expandLight(event, ${light.group})">
+                                    <div class="light-top">
+                                        <span class="light-icon">${light.icon}</span>
+                                        <div class="light-toggle"></div>
+                                    </div>
+                                    <div class="light-name">${light.name}</div>
+                                    <div class="light-level" id="level-${light.group}">--</div>
+                                    <div class="light-slider">
+                                        <input type="range" min="0" max="255" value="0"
+                                               onclick="event.stopPropagation()"
+                                               oninput="previewLevel(${light.group}, this.value)"
+                                               onchange="setLevel(${light.group}, this.value)">
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // API call helper
+        async function cbusCall(action, group, value = null) {
+            const baseUrl = `http://${CONFIG.host}/scada-remote`;
+            let url = `${baseUrl}?m=json&r=cbus1&c=${action}&matchnet=0&matchapp=56&matchgrp=${group}`;
+            
+            if (value !== null) {
+                url += `&value=${value}`;
+            }
+            
+            const headers = {};
+            if (CONFIG.username && CONFIG.password) {
+                headers['Authorization'] = 'Basic ' + btoa(CONFIG.username + ':' + CONFIG.password);
+            }
+            
+            try {
+                const response = await fetch(url, { headers });
+                const text = await response.text();
+                return { success: response.ok, data: text };
+            } catch (e) {
+                return { success: false, error: e.message };
+            }
+        }
+        
+        // Parse level from response
+        function parseLevel(data) {
+            // Handle [value] format
+            const match = data.match(/\[(\d+)\]/);
+            if (match) {
+                const val = parseInt(match[1]);
+                // Value seems to be 0-255 scale
+                return Math.min(255, Math.max(0, val));
+            }
+            return 0;
+        }
+        
+        // Toggle light on/off
+        async function toggleLight(group) {
+            const card = document.getElementById(`light-${group}`);
+            const isOn = card.classList.contains('on');
+            const newValue = isOn ? 0 : 255;
+            
+            // Optimistic update
+            updateLightUI(group, newValue);
+            
+            const result = await cbusCall('set', group, newValue);
+            if (!result.success) {
+                // Revert on failure
+                updateLightUI(group, isOn ? 255 : 0);
+            }
+        }
+        
+        // Set specific level
+        async function setLevel(group, value) {
+            updateLightUI(group, value);
+            await cbusCall('set', group, value);
+        }
+        
+        // Preview level (while dragging)
+        function previewLevel(group, value) {
+            const levelEl = document.getElementById(`level-${group}`);
+            const percent = Math.round((value / 255) * 100);
+            levelEl.textContent = value > 0 ? `${percent}%` : 'Off';
+        }
+        
+        // Expand light to show slider
+        function expandLight(e, group) {
+            e.preventDefault();
+            const card = document.getElementById(`light-${group}`);
+            card.classList.toggle('expanded');
+        }
+        
+        // Update light UI
+        function updateLightUI(group, level) {
+            const card = document.getElementById(`light-${group}`);
+            const levelEl = document.getElementById(`level-${group}`);
+            const slider = card?.querySelector('input[type="range"]');
+            
+            if (!card) return;
+            
+            lightStates[group] = level;
+            
+            if (level > 0) {
+                card.classList.add('on');
+                const percent = Math.round((level / 255) * 100);
+                levelEl.textContent = `${percent}%`;
+            } else {
+                card.classList.remove('on');
+                levelEl.textContent = 'Off';
+            }
+            
+            if (slider) {
+                slider.value = level;
+            }
+        }
+        
+        // Refresh all lights (only visible ones)
+        async function refreshAll() {
+            document.getElementById('statusDot').classList.remove('connected');
+            
+            let success = false;
+            for (const light of LIGHTS) {
+                if (!isLightVisible(light.group)) continue; // Skip hidden lights
+                
+                const result = await cbusCall('get', light.group);
+                if (result.success) {
+                    success = true;
+                    const level = parseLevel(result.data);
+                    updateLightUI(light.group, level);
+                }
+            }
+            
+            if (success) {
+                document.getElementById('statusDot').classList.add('connected');
+            }
+        }
+        
+        // Scene presets
+        async function setScene(scene) {
+            const visibleLights = LIGHTS.filter(l => isLightVisible(l.group));
+            
+            const scenes = {
+                allOff: () => visibleLights.map(l => ({ group: l.group, value: 0 })),
+                allOn: () => visibleLights.map(l => ({ group: l.group, value: 255 })),
+                evening: () => [
+                    { group: 11, value: 180 }, // Lounge
+                    { group: 12, value: 150 }, // Dining
+                    { group: 13, value: 200 }, // Kitchen Counter
+                    { group: 14, value: 100 }, // Patio
+                    { group: 5, value: 80 },   // Passage
+                ].filter(a => isLightVisible(a.group)),
+                night: () => [
+                    { group: 5, value: 50 },   // Passage
+                    { group: 10, value: 30 },  // Foyer
+                ].filter(a => isLightVisible(a.group))
+            };
+            
+            const actions = scenes[scene]?.() || [];
+            
+            // If evening/night, turn off others first (only visible ones)
+            if (scene === 'evening' || scene === 'night') {
+                for (const light of visibleLights) {
+                    if (!actions.find(a => a.group === light.group)) {
+                        updateLightUI(light.group, 0);
+                        await cbusCall('set', light.group, 0);
+                    }
+                }
+            }
+            
+            for (const action of actions) {
+                updateLightUI(action.group, action.value);
+                await cbusCall('set', action.group, action.value);
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+        
+        // Settings
+        function openSettings() {
+            document.getElementById('settingsHost').value = CONFIG.host;
+            document.getElementById('settingsUser').value = CONFIG.username;
+            document.getElementById('settingsPass').value = CONFIG.password;
+            
+            // Build the manage lights list
+            buildManageLightsList();
+            
+            // Reset to connection tab
+            switchTab('connection');
+            
+            document.getElementById('settingsModal').classList.add('open');
+        }
+        
+        function closeSettings() {
+            document.getElementById('settingsModal').classList.remove('open');
+        }
+        
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.modal-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target?.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Highlight correct tab button
+            document.querySelectorAll('.modal-tab').forEach(tab => {
+                if (tab.textContent.toLowerCase().includes(tabName === 'connection' ? 'connection' : 'lights')) {
+                    tab.classList.add('active');
+                }
+            });
+        }
+        
+        function buildManageLightsList() {
+            const container = document.getElementById('manageLightsList');
+            const roomGroups = {};
+            
+            // Group all lights by room
+            LIGHTS.forEach(light => {
+                if (!roomGroups[light.room]) {
+                    roomGroups[light.room] = [];
+                }
+                roomGroups[light.room].push(light);
+            });
+            
+            const roomOrder = ['Living Areas', 'Kitchen', 'Bedrooms', 'Bathrooms', 'Outdoor', 'Utility'];
+            
+            container.innerHTML = roomOrder.map(roomName => {
+                const lights = roomGroups[roomName];
+                if (!lights) return '';
+                
+                return `
+                    <div class="manage-room">
+                        <div class="manage-room-header">${roomName}</div>
+                        ${lights.map(light => `
+                            <div class="manage-light-item">
+                                <div class="manage-light-info">
+                                    <span class="manage-light-icon">${light.icon}</span>
+                                    <div>
+                                        <div class="manage-light-name">${light.name}</div>
+                                        <div class="manage-light-group">Group ${light.group}</div>
+                                    </div>
+                                </div>
+                                <label class="visibility-toggle">
+                                    <input type="checkbox" 
+                                           ${isLightVisible(light.group) ? 'checked' : ''}
+                                           onchange="toggleLightVisibility(${light.group}, this.checked)">
+                                    <span class="visibility-slider"></span>
+                                </label>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function toggleLightVisibility(group, visible) {
+            setLightVisibility(group, visible);
+        }
+        
+        function setAllLightsVisibility(visible) {
+            LIGHTS.forEach(light => {
+                setLightVisibility(light.group, visible);
+            });
+            buildManageLightsList(); // Refresh the list
+        }
+        
+        function saveSettings() {
+            CONFIG.host = document.getElementById('settingsHost').value;
+            CONFIG.username = document.getElementById('settingsUser').value;
+            CONFIG.password = document.getElementById('settingsPass').value;
+            
+            localStorage.setItem('cbus_host', CONFIG.host);
+            localStorage.setItem('cbus_user', CONFIG.username);
+            localStorage.setItem('cbus_pass', CONFIG.password);
+            
+            // Save visibility settings
+            saveVisibility();
+            
+            closeSettings();
+            
+            // Rebuild UI with new visibility settings
+            buildUI();
+            refreshAll();
+        }
+        
+        // Initialize
+        buildUI();
+        
+        // Auto-refresh on load
+        setTimeout(refreshAll, 500);
+        
+        // Refresh every 30 seconds
+        setInterval(refreshAll, 30000);
+        
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('SW registered:', reg.scope))
+                    .catch(err => console.log('SW registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
